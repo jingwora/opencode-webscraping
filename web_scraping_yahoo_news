@@ -1,0 +1,91 @@
+import os
+import sys
+import requests
+import bs4
+from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime, timedelta, timezone
+import logging
+
+
+def create_logging():
+    """ Create logging """
+    logs_folder = 'logs/'
+    if not os.path.exists(logs_folder):
+        os.makedirs(logs_folder)
+
+    logging.basicConfig(filename=datetime.now().strftime('logs/logfile_%Y%m%d.log'),
+                        level=logging.INFO,
+                        format='%(asctime)s | %(name)s | %(levelname)s | %(message)s')
+
+    logging.info('Started')
+    logging.info('Python environment : ' + str(sys.version))
+    logging.info('Requests version: ' + str(requests.__version__))
+    logging.info('BeautifulSoup version: ' + str(bs4.__version__))
+    logging.info('Pandas version: ' + str(pd.__version__))
+
+
+def yahoo_news_scraping():
+    """ Scrap data and return result dataframe """
+    #  Set parameters
+    home_url = "https://news.yahoo.co.jp/topics/"
+    topics = ['domestic', 'world', 'business', 'entertainment', 'sports', 'it', 'science']
+    page_no = ['/?page=1', '?page=2', '?page=3']
+
+    result = pd.DataFrame(columns=['titles', 'datetimes', 'topics'])
+
+    #  Get data
+    for t in topics:
+        for p in page_no:
+            df = pd.DataFrame(columns=['titles', 'datetimes', 'topics'])
+
+            url = home_url + "/" + t + "/" + p
+
+            res = requests.get(url)
+            logging.info('GET: ' + url)
+            logging.info('STATUS: ' + str(res.status_code))
+
+            soup = BeautifulSoup(res.text, 'lxml')
+
+            titles = soup.find_all('div', {'class': 'newsFeed_item_title'})
+            datetimes = soup.find_all('time', {'class': 'newsFeed_item_date'})
+
+            # Create dataframe
+            df = pd.DataFrame(list(zip(titles, datetimes)), columns=['titles', 'datetimes'])
+
+            spec_chars = ['<div class="newsFeed_item_title">', '</div>']
+            for char in spec_chars:
+                df['titles'] = df['titles'].astype(str).str.replace(char, ' ')
+
+            spec_chars = ['<time class="newsFeed_item_date">', '</time>']
+            for char in spec_chars:
+                df['datetimes'] = df['datetimes'].astype(str).str.replace(char, ' ')
+
+            df['topics'] = t
+
+            result = pd.concat([result, df])
+            logging.info('Finish Scraping')
+
+    return result
+
+
+def save_csv(result):
+    """ Save dataframe to csv """
+
+    jst = timezone(timedelta(hours=9), 'JST')
+    now = datetime.now(jst).strftime("%Y%m%d_%H%M%S")
+    output_folder = 'outputs/'
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    output = output_folder + 'news_' + now + '.csv'
+
+    result.to_csv(output, index=False, encoding='utf_8_sig')
+    logging.info('No. of news' + str(len(result)))
+    logging.info('Save file: ' + output)
+
+
+if __name__ == '__main__':
+    create_logging()
+    result = yahoo_news_scraping()
+    save_csv(result)
