@@ -14,9 +14,14 @@ def create_logging():
     if not os.path.exists(logs_folder):
         os.makedirs(logs_folder)
 
-    logging.basicConfig(filename=datetime.now().strftime('logs/logfile_%Y%m%d.log'),
+    logging.basicConfig(filename=datetime.now().strftime('logs/logfile_ws02_%Y%m%d.log'),
                         level=logging.INFO,
                         format='%(asctime)s | %(name)s | %(levelname)s | %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s | %(name)s | %(levelname)s | %(message)s')
+    console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
 
     logging.info('Started')
     logging.info('Python environment : ' + str(sys.version))
@@ -28,43 +33,41 @@ def create_logging():
 def yahoo_news_scraping():
     """ Scrap data and return result dataframe """
     #  Set parameters
-    home_url = "https://news.yahoo.co.jp/topics/"
-    topics = ['domestic', 'world', 'business', 'entertainment', 'sports', 'it', 'science']
-    page_no = ['/?page=1', '?page=2', '?page=3']
+    home_url = "https://news.yahoo.co.jp/ranking/comment/"
+    topics = ['domestic', 'world', 'business', 'entertainment', 'sports', 'it-science', 'life']
 
     result = pd.DataFrame(columns=['titles', 'datetimes', 'topics'])
 
     #  Get data
     for t in topics:
-        for p in page_no:
-            df = pd.DataFrame(columns=['titles', 'datetimes', 'topics'])
+        df = pd.DataFrame(columns=['titles', 'datetimes', 'topics'])
 
-            url = home_url + "/" + t + "/" + p
+        url = home_url + t
 
-            res = requests.get(url)
-            logging.info('GET: ' + url)
-            logging.info('STATUS: ' + str(res.status_code))
+        res = requests.get(url)
+        logging.info('GET: ' + url)
+        logging.info('STATUS: ' + str(res.status_code))
 
-            soup = BeautifulSoup(res.text, 'lxml')
+        soup = BeautifulSoup(res.text, 'lxml')
 
-            titles = soup.find_all('div', {'class': 'newsFeed_item_title'})
-            datetimes = soup.find_all('time', {'class': 'newsFeed_item_date'})
+        titles = soup.find_all('div', {'class': 'newsFeed_item_title'})
+        datetimes = soup.find_all('time', {'class': 'newsFeed_item_date'})
 
-            # Create dataframe
-            df = pd.DataFrame(list(zip(titles, datetimes)), columns=['titles', 'datetimes'])
+        # Create dataframe
+        df = pd.DataFrame(list(zip(titles, datetimes)), columns=['titles', 'datetimes'])
 
-            spec_chars = ['<div class="newsFeed_item_title">', '</div>']
-            for char in spec_chars:
-                df['titles'] = df['titles'].astype(str).str.replace(char, ' ')
+        spec_chars = ['<div class="newsFeed_item_title">', '</div>']
+        for char in spec_chars:
+            df['titles'] = df['titles'].astype(str).str.replace(char, ' ')
 
-            spec_chars = ['<time class="newsFeed_item_date">', '</time>']
-            for char in spec_chars:
-                df['datetimes'] = df['datetimes'].astype(str).str.replace(char, ' ')
+        spec_chars = ['<time class="newsFeed_item_date">', '</time>']
+        for char in spec_chars:
+            df['datetimes'] = df['datetimes'].astype(str).str.replace(char, ' ')
 
-            df['topics'] = t
+        df['topics'] = t
 
-            result = pd.concat([result, df])
-            logging.info('Finish Scraping')
+        result = pd.concat([result, df])
+        logging.info('Finish Scraping')
 
     return result
 
